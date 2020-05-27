@@ -1,272 +1,256 @@
-<body>
-<canvas width = "600" height = "600"></canvas><br>
-<b>Вращение:</b>
-<input type = "range" min = "-10" max = "10" step = "0.00001" value = "0" id = "degY" oninput = "update()"><br>
-</body>
-<script>
-	//3. Пирамида перед кубом
-	var canvas = document.querySelector("canvas");
-	var ctx = canvas.getContext("2d");
-	ctx.translate(canvas.width/2, canvas.height/2);
-	class Vector2d{ 
-		constructor(x, y){
-			this.x = x;
-			this.y = y;
-		}
-		move(mx, my){
-			let x = this.x + mx;
-			let y = this.y + my;
-			return new Vector2d(x, y);
-		}
-		scale(w){
-			let x = this.x * w;
-			let y = this.y * w;
-			return new Vector2d(x, y);
-		}
-		rotate(angle){
-			let x = this.x * Math.cos(angle) - this.y * Math.sin(angle);
-			let y = this.x * Math.sin(angle) + this.y * Math.cos(angle);
-			return new Vector2d(x, y);
-		}
-		static copy(vector){
-			return new Vector2d(vector.x, vector.y);
-		}
-	}
-	class Vector3d{
-		constructor(x, y, z){
-			this.x = x;
-			this.y = y;
-			this.z = z;
-		}
-		getProjection(dist){ //Получение проекции точек на плоскость
-			let x = this.x*dist/this.z;
-			let y = this.y*dist/this.z;
-			return new Vector2d(x, y);
-		}
-		move(mx, my, mz){
-			let x = this.x + mx;
-			let y = this.y + my;
-			let z = this.z + mz;
-			return new Vector3d(x, y, z);
-		}
-		scale(w){
-			let x = this.x * w;
-			let y = this.y * w;
-			let z = this.z * w;
-			return new Vector3d(x, y, z);
-		}
-		rotate(angleX, angleY, angleZ){
-			let x, y, z;
-			let temp = new Vector3d(this.x, this.y, this.z);
-			//Вращение вокруг оси 0Y
-			x = temp.x * Math.cos(angleY) + (temp.z)* Math.sin(angleY);
-			y = temp.y;
-			z = -temp.x * Math.sin(angleY) + (temp.z) * Math.cos(angleY);
-			temp.x = x; temp.y = y; temp.z = z;
-			//Вращение вокруг оси 0X
-			x = temp.x;
-			y = temp.y  * Math.cos(angleX) + temp.z * Math.sin(angleX);
-			z = -temp.y * Math.sin(angleX) + temp.z * Math.cos(angleX);
-			temp.x = x; temp.y = y; temp.z = z;
-			//Вращение вокруг оси 0Z
-			x = temp.x  * Math.cos(angleZ) + temp.y * Math.sin(angleZ);
-			y = -temp.x * Math.sin(angleZ) + temp.y * Math.cos(angleZ);
-			z = temp.z;
-			temp.x = x; temp.y = y; temp.z = z;
-			return temp;
-		}
-		static copy(vector){
-			return new Vector3d(vector.x, vector.y, vector.z);
-		}
-	}
-	class Face{ //Класс граней
-		static faces = [];
-		constructor(){
-				this.vertices = [...arguments];
-				this.verticesForRender = [...this.vertices];
-				Face.faces.push(this);
-				this.x;
-				this.y;
-				this.z;
-				this.color = "#" + Math.random().toString(16).slice(2,8);
-		}
-		render(){ //Отрисовка грани
-			ctx.fillStyle = this.color;
-			ctx.strokeStyle = "#50f";
-			ctx.beginPath();
-			let tempVector = this.verticesForRender[0].getProjection(500);
-			ctx.moveTo(tempVector.x, tempVector.y);
-			for(let vertex of this.verticesForRender){
-				tempVector = vertex.getProjection(500);
-				ctx.lineTo(tempVector.x, tempVector.y);
-			}
-			ctx.closePath();
-			ctx.fill();
-			ctx.stroke();
-		}
-		update(x, y, z, degX, degY, degZ){ //Замена векторон на повернутые и сдвинутые:D
-			this.verticesForRender = this.vertices.map((vertex)=>vertex.move(0 + x, 0 + y, -900 + z));
-			this.verticesForRender = this.verticesForRender.map((vertex)=>vertex.rotate(degX, degY, degZ));
-			this.verticesForRender = this.verticesForRender.map((vertex)=>vertex.move(0 - x, 0 - y, 900 - z));
-			this.verticesForRender = this.verticesForRender.map((vertex)=>vertex.move(x, y, z));
-		}
-		get minZ(){ //Получение минимальной точки Z у грани. В данном случае, Z - Глубина, Y - Высота, X - Ширина
-			let min = this.verticesForRender[0].z;
-			for(let vertex of this.verticesForRender){
-				if(vertex.z < min){
-					min = vertex.z;
-				}
-			}
-			return min;
-		}
-		get maxZ(){ //Получение максимальной точки Z у грани. 
-			let max = this.verticesForRender[0].z;
-			for(let vertex of this.verticesForRender){
-				if(vertex.z > max){
-					max = vertex.z;
-				}
-			}
-			return max;
-		}
-		get minX(){ //Получение минимальной точки Z у грани. В данном случае, Z - Глубина, Y - Высота, X - Ширина
-			let min = this.verticesForRender[0].x;
-			for(let vertex of this.verticesForRender){
-				if(vertex.x < min){
-					min = vertex.x;
-				}
-			}
-			return min;
-		}
-		get maxX(){ //Получение максимальной точки Z у грани. 
-			let max = this.verticesForRender[0].x;
-			for(let vertex of this.verticesForRender){
-				if(vertex.x > max){
-					max = vertex.x;
-				}
-			}
-			return max;
-		}
-	}
-	class Polygon{ //Класс фигур состоящих из граней
-		constructor(){
-			this.faces = [...arguments];
-		}
-		render(){
-			for(let face of this.faces){ //Вызываем метод отрисовки для каждой грани
-				face.render();
-			}
-		}
-		update(x, y, z, degX, degY, degZ){ //Присвоение новых координат и угла поворота
-			for(let face of this.faces){
-				face.update(x, y, z, degX, degY, degZ);
-			}
-		}
-		get minZ(){ //Получение минимальной точки Z у фигуры !НЕ ПРИГОДИЛОСЬ
-			let min = this.faces[0].minZ;
-			for(let face of this.faces){
-				if(face.minZ < min){
-					min = face.minZ;
-				}
-			}
-			return min;
-		}
-		get maxZ(){ //Получение максимальной точки Z у фигуры !НЕ ПРИГОДИЛОСЬ
-			let max = this.faces[0].maxZ;
-			for(let face of this.faces){
-				if(face.maxZ > max){
-					max = face.maxZ;
-				}
-			}
-			return max;
-		}
-	}
-	var triangle = new Polygon(
-		new Face(
-			new Vector3d(-100, 0, -100),
-			new Vector3d(100, 0, -100),
-			new Vector3d(100, 0, 100),
-			new Vector3d(-100, 0, 100)
-		),
-		new Face(
-			new Vector3d(0, -150, 0),
-			new Vector3d(100, 0, -100),
-			new Vector3d(100, 0, 100)
-		),
-		new Face(
-			new Vector3d(0, -150, 0),
-			new Vector3d(100, 0, 100),
-			new Vector3d(-100, 0, 100)
-		),
-		new Face(
-			new Vector3d(0, -150, 0),
-			new Vector3d(-100, 0, 100),
-			new Vector3d(-100, 0, -100)
-		),
-		new Face(
-			new Vector3d(0, -150, 0),
-			new Vector3d(100, 0, -100),
-			new Vector3d(-100, 0, -100)
-		)
-	);
- 
-	var rectangle = new Polygon(
-		new Face(
-			new Vector3d(-100, -100, 100),
-			new Vector3d(100, -100, 100),
-			new Vector3d(100, 100, 100),
-			new Vector3d(-100, 100, 100)
-		),
-		new Face(
-			new Vector3d(-100, -100, -100),
-			new Vector3d(100, -100, -100),
-			new Vector3d(100, -100, 100),
-			new Vector3d(-100, -100, 100)
-		),
-		new Face(
-			new Vector3d(-100, -100, -100),
-			new Vector3d(-100, 100, -100),
-			new Vector3d(-100, 100, 100),
-			new Vector3d(-100, -100, 100)
-		),
-		new Face(
-			new Vector3d(100, -100, -100),
-			new Vector3d(100, 100, -100),
-			new Vector3d(100, 100, 100),
-			new Vector3d(100, -100, 100)
-		),
-		new Face(
-			new Vector3d(-100, -100, -100),
-			new Vector3d(100, -100, -100),
-			new Vector3d(100, 100, -100),
-			new Vector3d(-100, 100, -100)
-		),
-		new Face(
-			new Vector3d(-100, 100, -100),
-			new Vector3d(100, 100, -100),
-			new Vector3d(100, 100, 100),
-			new Vector3d(-100, 100, 100)
-		),
-	);
-	function update(){
-		let x = 0;
-		let y = 100;
-		let z = 400;
-		let degY = parseFloat(document.querySelector("#degY").value);
-		triangle.update(x, y, z+200, 0, degY, 0);
-		rectangle.update(x, y-70, 700+500, 0, degY, 0);
-		Face.faces.sort((b, a)=>{
-			a = Math.sqrt(a.maxZ**2 + a.maxX**2);
-			b = Math.sqrt(b.maxZ**2 + b.maxX**2);
-			return a - b;
-		});
-		render();
-	}
-	function render(){
-		ctx.fillStyle = "#000";
-		ctx.fillRect(-canvas.width/2, -canvas.height/2, canvas.width, canvas.height);
-		Face.faces.forEach(face => face.render());
- 
-	}
-	update();
-	render();
-</script>
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Bootstrap 4</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.1.0/css/bootstrap.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.0/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.1.0/js/bootstrap.min.js"></script>
+    <style>
+        .page-footer {
+          background: #ffd000;
+          color:  #2a2e33;
+        }
+
+        .thumb img {
+            -webkit-filter: grayscale(0);
+            filter: none;
+            border-radius: 5px;
+            background: #ffd000;
+            border: 1px solid #2a2e33;
+            padding: 5px;
+        }
+
+        .thumb img:hover {
+            -webkit-filter: grayscale(1);
+            filter: grayscale(1);
+        }
+
+        .thumb {
+            padding: 5px;
+        }
+
+        .row {
+          position: relative;
+          top: 1rem;
+          left: 0;
+          right: 1rem;
+        }
+
+        #dd1 {
+          position: relative;
+          text-align: center;
+          left: 1rem;
+          width: 100%;
+          color:  #2a2e33;
+          background: #ffd000;
+        }
+        
+        .list-rectangle {
+          list-style: none;
+          margin: 0;
+          padding: 0;
+        }
+
+        .list-rectangle>li {
+          position: relative;
+          display: block;
+          margin-bottom: .25rem;
+          padding: .325rem .825rem .325rem 1.325rem;
+          color:  #2a2e33;
+          background: #ffd000;
+        }
+
+        .list-rectangle>li:last-child {
+          margin-bottom: 0;
+          text-align: center;
+        }
+
+        .list-rectangle>li::before {
+          content: "";
+          position: absolute;
+          left: 0;
+          top: 0;
+          bottom: 0;
+          width: 0.5rem;
+          background: #2a2e33;
+        }
+      </style>
+  </head>
+  <body>
+    <div class="container-fluid">
+      <div class="row">
+        <div class="col-xl-12">
+          <nav class="navbar navbar-expand-sm bg-dark navbar-dark">
+
+              <a class="navbar-brand">
+                  <img src="https://images.vexels.com/media/users/3/176700/isolated/preview/b5692ef41afd61f7bca1e3689c8a7551-cat-dance-dancing-flat-stroke-by-vexels.png" width="40px">
+              </a>
+
+              <div class="btn-group">
+                <button type="button" class="btn btn-warning">ACTION</button>
+                <button type="button" class="btn btn-warning dropdown-toggle dropdown-toggle-split" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" style="right: 10px;">
+                  <span class="sr-only">Toggle Dropdown</span>
+                </button>
+                <div class="dropdown-menu">
+                  <a class="dropdown-item" href="#">Action</a>
+                  <a class="dropdown-item" href="#">Another action</a>
+                  <a class="dropdown-item" href="#">Something else here</a>
+                  <div class="dropdown-divider"></div>
+                  <a class="dropdown-item" href="#">Separated link</a>
+                </div>
+              </div>
+
+              <div class="btn-group">
+                <button type="button" class="btn btn-warning">EVENTS</button>
+                <button type="button" class="btn btn-warning dropdown-toggle dropdown-toggle-split" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" style="right: 10px;">
+                  <span class="sr-only">Toggle Dropdown</span>
+                </button>
+                <div class="dropdown-menu">
+                  <a class="dropdown-item" href="#">Action</a>
+                  <a class="dropdown-item" href="#">Another action</a>
+                  <a class="dropdown-item" href="#">Something else here</a>
+                  <div class="dropdown-divider"></div>
+                  <a class="dropdown-item" href="#">Separated link</a>
+                </div>
+              </div>
+
+              <div class="btn-group mr-auto">
+                <button type="button" class="btn btn-warning">NEWS</button>
+                <button type="button" class="btn btn-warning dropdown-toggle dropdown-toggle-split" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                  <span class="sr-only">Toggle Dropdown</span>
+                </button>
+                <div class="dropdown-menu">
+                  <a class="dropdown-item" href="#">Action</a>
+                  <a class="dropdown-item" href="#">Another action</a>
+                  <a class="dropdown-item" href="#">Something else here</a>
+                  <div class="dropdown-divider"></div>
+                  <a class="dropdown-item" href="#">Separated link</a>
+                </div>
+              </div>
+
+              <form class="form-inline my-2 my-lg-0">
+                  <input class="form-control mr-sm-2" type="text" placeholder="Search">
+                  <button class="btn btn-success my-2 my-sm-0" type="button">Search</button>
+              </form>
+      </div>
+    </div><br>
+
+    <div class="row">
+      <div class="col-xl-3 col-md-4 col-6">
+        <div class="dropdown">
+          <ol class="list-rectangle"> <li> GALLERY </li> </ol>
+          <ol class="list-rectangle" data-toggle="dropdown"> <li> GAMES </li> </ol>
+          <ul id="dd1" class="dropdown-menu"> 
+            <li> <a href="#"> Strategy <span class="badge auto"> NEW </span> </a> </li>
+            <li> <a href="#"> Adventure <span class="badge auto"> NEW </span> </a> </li>
+            <li> <a href="#"> Role-playing (RPG) <span class="badge auto"> NEW </span> </a> </li>
+            <li class="divider"></li>
+            <li> <a href="#"> Racing <span class="badge auto"> NEW </span> </a> </li>
+          </ul>
+
+          <div class="row">
+            <div class="col-lg-3 col-md-4 col-6 thumb">
+                <a data-fancybox="gallery" href="https://www.pcgamesn.com/wp-content/uploads/legacy/The_Best_Racing_Games_on_PC.JPG">
+                  <img class="img-fluid" src="https://www.pcgamesn.com/wp-content/uploads/legacy/The_Best_Racing_Games_on_PC.JPG" alt="RACE">
+                </a>
+            </div>
+            <div class="col-lg-3 col-md-4 col-6 thumb">
+              <a data-fancybox="gallery" href="https://i.ytimg.com/vi/SW03Qxrjo8E/maxresdefault.jpg">
+                <img class="img-fluid" src="https://i.ytimg.com/vi/SW03Qxrjo8E/maxresdefault.jpg" alt="ADVENTURE">
+              </a>
+            </div>
+            <div class="col-lg-3 col-md-4 col-6 thumb">
+                <a data-fancybox="gallery" href="https://gamespot1.cbsistatic.com/uploads/scale_medium/1406/14063904/3477859-9302534970-Drago.jpg">
+                  <img class="img-fluid" src="https://gamespot1.cbsistatic.com/uploads/scale_medium/1406/14063904/3477859-9302534970-Drago.jpg" alt="RPG">
+                </a>
+              </div>
+              <div class="col-lg-3 col-md-4 col-6 thumb">
+                  <a data-fancybox="gallery" href="https://assets.rockpapershotgun.com/images/2020/01/Sid-Meiers-Civilization-VI-Best-Strategy-Games-2020.jpg">
+                    <img class="img-fluid" src="https://assets.rockpapershotgun.com/images/2020/01/Sid-Meiers-Civilization-VI-Best-Strategy-Games-2020.jpg" alt="ADVENTURE">
+                  </a>
+              </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-xl-9 col-md-4 col-6">
+          <div id="demo" class="carousel slide bg-dark" data-ride="carousel">
+              <ul class="carousel-indicators">
+                <li data-target="#demo" data-slide-to="0" class="active"></li>
+                <li data-target="#demo" data-slide-to="1"></li>
+                <li data-target="#demo" data-slide-to="2"></li>
+                <li data-target="#demo" data-slide-to="3"></li>
+              </ul>
+  
+              <div class="carousel-inner">
+                <div class="carousel-item active">
+                  <img src="https://www.pcgamesn.com/wp-content/uploads/legacy/The_Best_Racing_Games_on_PC.JPG" alt="RACE" style="width:100%;"> 
+                </div>
+                <div class="carousel-item">
+                  <img src="https://i.ytimg.com/vi/SW03Qxrjo8E/maxresdefault.jpg" alt="ADVENTURE" style="width:100%;">
+                </div>
+                <div class="carousel-item">
+                  <img src="https://gamespot1.cbsistatic.com/uploads/scale_medium/1406/14063904/3477859-9302534970-Drago.jpg" alt="RPG" style="width:100%;">
+                </div>
+                <div class="carousel-item">
+                  <img src="https://assets.rockpapershotgun.com/images/2020/01/Sid-Meiers-Civilization-VI-Best-Strategy-Games-2020.jpg" alt="STRATEGY" style="width:100%;">
+                </div>
+              </div>
+  
+              <a class="carousel-control-prev" href="#demo" data-slide="prev">
+                <span class="carousel-control-prev-icon"></span>
+              </a>
+              <a class="carousel-control-next" href="#demo" data-slide="next">
+                <span class="carousel-control-next-icon"></span>
+              </a>
+            </div>
+      </div>
+    </div><br>
+
+    <div class="row">
+    <div class="col-xl-12">
+        <footer class="page-footer font-small pt-4">
+            <div class="container-fluid text-center text-md-left">
+              <div class="row">
+                <div class="col-md-6 mt-md-0 mt-3">
+                  <h5 class="text-uppercase">Footer Content</h5>
+                  <p>Just site!</p>
+                </div>
+      
+                <hr class="clearfix w-100 d-md-none pb-3">
+                <div class="col-md-3 mb-md-0 mb-3">
+                  <h5 class="text-uppercase"></h5>
+                  <ul class="list-unstyled">
+                    <li>
+                      <a href="#!">NEWS</a>
+                    </li>
+                    <li>
+                      <a href="#!">GALLERY</a>
+                    </li>
+                  </ul>
+                </div>
+      
+                <div class="col-md-3 mb-md-0 mb-3">
+                  <h5 class="text-uppercase"></h5>
+                  <ul class="list-unstyled">
+                    <li>
+                      <a href="#!">GAMES</a>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+      
+            <div class="footer-copyright text-center py-3">© Kartashov D.R. 2020:
+              <a href="https://www.krok.edu.ua/ua/"> Krok.edu.ua</a>
+            </div>
+      
+          </footer>
+    </div>
+  </div>
+    </div>
+  </body>
+</html>
